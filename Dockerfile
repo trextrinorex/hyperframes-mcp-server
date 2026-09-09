@@ -1,6 +1,7 @@
 FROM node:22-bookworm-slim
 
 ENV NODE_ENV=production \
+    NPM_CONFIG_YES=true \
     PUPPETEER_SKIP_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     HF_WORKSPACE=/workspace/projects
@@ -15,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY package.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --ignore-scripts && test -x node_modules/.bin/hyperframes
 
 COPY src ./src
 COPY README.md ./README.md
