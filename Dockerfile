@@ -12,11 +12,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium ffmpeg unzip ca-certificates fonts-liberation fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
-# Render's Docker runtime provides only a 64 MB /dev/shm. HyperFrames/Chrome
-# normally uses shared memory, so launch Chromium with the supported fallback
-# that stores shared-memory files under /tmp instead. This avoids requiring
-# Docker --shm-size, which Render does not expose for Docker Web Services.
-RUN printf '%s\n' '#!/bin/sh' 'exec /usr/bin/chromium --disable-dev-shm-usage "$@"' > /usr/local/bin/hyperframes-chromium && \
+# Render Docker Web Services provide only ~64 MB /dev/shm. Chromium needs more
+# for its default shared-memory path. We launch with a wrapper that:
+# - disables /dev/shm usage (writes temp files under /tmp instead)
+# - disables the sandbox (common requirement in restricted containers)
+# - disables GPU (no GPU available on Render free tier)
+# - uses a single process to reduce memory pressure
+# This avoids requiring docker --shm-size, which Render does not expose.
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'exec /usr/bin/chromium \' \
+    '  --disable-dev-shm-usage \' \
+    '  --no-sandbox \' \
+    '  --disable-gpu \' \
+    '  --disable-software-rasterizer \' \
+    '  --disable-extensions \' \
+    '  --disable-background-networking \' \
+    '  --single-process \' \
+    '  "$@"' \
+    > /usr/local/bin/hyperframes-chromium && \
     chmod +x /usr/local/bin/hyperframes-chromium
 
 RUN npm install -g hyperframes@0.8.33 && \
