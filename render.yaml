@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: hyperframes-mcp-server
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: HF_WORKSPACE
+        value: /workspace/projects
+      - key: HF_COMMAND_TIMEOUT_MS
+        value: "900000"
