@@ -1,6 +1,6 @@
 {
   "name": "hyperframes-mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Remote MCP server that exposes HyperFrames video creation and rendering tools over Streamable HTTP.",
   "type": "module",
@@ -15,7 +15,7 @@
   "dependencies": {
     "@modelcontextprotocol/node": "2.0.0",
     "@modelcontextprotocol/server": "2.0.0",
-    "hyperframes": "0.8.31",
+    "hyperframes": "0.8.33",
     "zod": "4.4.3"
   }
 }
