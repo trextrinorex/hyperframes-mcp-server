@@ -14,7 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY package.json ./
-RUN npm install --omit=dev --ignore-scripts && test -x /app/node_modules/.bin/hyperframes
+RUN npm install --omit=dev && \
+    test -x /app/node_modules/.bin/hyperframes && \
+    node -e "const fs=require('fs'); console.log(fs.realpathSync('/app/node_modules/.bin/hyperframes'))"
 
 COPY src ./src
 COPY README.md ./README.md
