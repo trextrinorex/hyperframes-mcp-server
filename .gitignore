@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+workspace/
+renders/
+*.mp4
+*.mov
+*.webm
+*.wav
+*.mp3
