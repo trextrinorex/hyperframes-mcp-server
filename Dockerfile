@@ -6,17 +6,19 @@ ENV NODE_ENV=production \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
     HYPERFRAMES_BROWSER_PATH=/usr/bin/chromium \
     HF_WORKSPACE=/workspace/projects \
-    PATH=/app/node_modules/.bin:$PATH
+    HYPERFRAMES_BIN=/usr/local/bin/hyperframes
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium ffmpeg unzip ca-certificates fonts-liberation fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
+RUN npm install -g hyperframes@0.8.33 && \
+    test -x /usr/local/bin/hyperframes && \
+    hyperframes --version
+
 WORKDIR /app
 COPY package.json ./
-RUN npm install --omit=dev && \
-    test -x /app/node_modules/.bin/hyperframes && \
-    node -e "const fs=require('fs'); console.log(fs.realpathSync('/app/node_modules/.bin/hyperframes'))"
+RUN npm install --omit=dev
 
 COPY src ./src
 COPY README.md ./README.md
