@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { promises as fs } from 'node:fs';
+import { promises as fs, createReadStream } from 'node:fs';
 import path from 'node:path';
 
 import { toNodeHandler } from '@modelcontextprotocol/node';
@@ -29,6 +29,20 @@ function relativeSafe(projectDir, filePath) {
   const resolved = path.resolve(projectDir, filePath);
   if (resolved !== projectDir && !resolved.startsWith(projectDir + path.sep)) throw new Error('File path escapes the project directory.');
   return resolved;
+}
+function contentTypeFor(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.mp4') return 'video/mp4';
+  if (ext === '.webm') return 'video/webm';
+  if (ext === '.mov') return 'video/quicktime';
+  if (ext === '.json') return 'application/json';
+  if (ext === '.html') return 'text/html; charset=utf-8';
+  if (ext === '.css') return 'text/css; charset=utf-8';
+  if (ext === '.js') return 'text/javascript; charset=utf-8';
+  if (ext === '.svg') return 'image/svg+xml';
+  if (ext === '.png') return 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  return 'application/octet-stream';
 }
 async function runHyperframes(args, cwd = ROOT) {
   const browserPath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.HYPERFRAMES_BROWSER_PATH || DEFAULT_BROWSER;
@@ -69,14 +83,71 @@ function registerTools(server) {
 }
 
 function buildServer() {
-  const server = new McpServer({ name: 'hyperframes-mcp-server', version: '1.1.0' }, { capabilities: { tools: {} }, instructions: 'Use HyperFrames tools to create, edit, validate and render HTML-native video projects.' });
+  const server = new McpServer({ name: 'hyperframes-mcp-server', version: '1.2.0' }, { capabilities: { tools: {} }, instructions: 'Use HyperFrames tools to create, edit, validate and render HTML-native video projects. After rendering, download videos from /artifacts/<project>/<file>.' });
   registerTools(server); return server;
 }
 const handler = createMcpHandler(buildServer);
 const nodeHandler = toNodeHandler(handler);
-const httpServer = createServer((req, res) => {
-  if (req.url === '/health' && req.method === 'GET') { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ ok: true, service: 'hyperframes-mcp-server' })); return; }
-  if (req.url === '/' && req.method === 'GET') { res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }); res.end('HyperFrames MCP server is running. MCP endpoint: /mcp'); return; }
-  nodeHandler(req, res);
+
+const httpServer = createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+
+    if (url.pathname === '/health' && req.method === 'GET') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, service: 'hyperframes-mcp-server' }));
+      return;
+    }
+
+    if (url.pathname === '/' && req.method === 'GET') {
+      res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('HyperFrames MCP server is running.\nMCP endpoint: /mcp\nArtifacts: /artifacts/<project>/<file>');
+      return;
+    }
+
+    // Safe artifact download: /artifacts/<project>/<relative-file>
+    if (url.pathname.startsWith('/artifacts/') && req.method === 'GET') {
+      const parts = url.pathname.slice('/artifacts/'.length).split('/').filter(Boolean);
+      if (parts.length < 2) {
+        res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('Usage: /artifacts/<project>/<file>');
+        return;
+      }
+      const projectName = parts[0];
+      const relFile = parts.slice(1).join('/');
+      try {
+        const cwd = projectPath(projectName);
+        const target = relativeSafe(cwd, relFile);
+        const stat = await fs.stat(target);
+        if (!stat.isFile()) {
+          res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+          res.end('Not a file');
+          return;
+        }
+        res.writeHead(200, {
+          'content-type': contentTypeFor(target),
+          'content-length': stat.size,
+          'content-disposition': `inline; filename="${path.basename(target)}"`,
+          'cache-control': 'no-store',
+        });
+        createReadStream(target).pipe(res);
+        return;
+      } catch (e) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+        res.end('File not found');
+        return;
+      }
+    }
+
+    nodeHandler(req, res);
+  } catch (e) {
+    res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('Internal error');
+  }
 });
-httpServer.listen(PORT, HOST, () => { console.log(`HyperFrames MCP server listening on http://${HOST}:${PORT}/mcp`); console.log(`HyperFrames binary: ${HYPERFRAMES_BIN}`); });
+
+httpServer.listen(PORT, HOST, () => {
+  console.log(`HyperFrames MCP server listening on http://${HOST}:${PORT}/mcp`);
+  console.log(`Artifacts: http://${HOST}:${PORT}/artifacts/<project>/<file>`);
+  console.log(`HyperFrames binary: ${HYPERFRAMES_BIN}`);
+});
